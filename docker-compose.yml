@@ -16,10 +16,10 @@ services:
   # ─── Frontend (Next.js) ────────────────────────
   frontend:
     image: node:20-alpine
-    working_dir: /app
+    working_dir: /usr/src/app
     volumes:
-      - ./frontend:/app
-    command: tail -f /dev/null          # placeholder until Next.js is initialized
+      - ./frontend:/usr/src/app
+    command: npm run dev
     expose:
       - "3000"
     restart: unless-stopped
