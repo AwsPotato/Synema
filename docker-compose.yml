@@ -17,12 +17,10 @@ services:
   frontend:
     image: node:20-alpine
     working_dir: /usr/src/app
+    command: sh -c "npm install && npm run dev"
     volumes:
       - ./frontend:/usr/src/app
-    command: npm run dev
-    expose:
-      - "3000"
-    restart: unless-stopped
+      - /usr/src/app/node_modules
 
   # ─── Backend (NestJS) ──────────────────────────
   backend:
@@ -30,12 +28,14 @@ services:
     working_dir: /usr/src/app
     volumes:
       - ./backend:/usr/src/app
-    command: npm run start:dev
+      - /usr/src/app/node_modules
+    command: sh -c "npm install && npm run start:dev"
     expose:
       - "3001"
     environment:
       DATABASE_URL: postgres://synema:synema@postgres:5432/synema
       REDIS_URL: redis://redis:6379
+      PORT: 3001
     depends_on:
       - postgres
       - redis
