@@ -135,4 +135,31 @@ export class SyncGateway implements OnGatewayConnection, OnGatewayDisconnect {
     
     client.broadcast.to(roomId).emit('video:seek', { currentTime });
   }
+
+  @SubscribeMessage('chat:message')
+  async handleChatMessage(
+    @MessageBody() data: { roomId: string; username: string; text: string },
+  ) {
+    const { roomId, username, text } = data;
+    const payload = {
+      roomId,
+      username,
+      text,
+      timestamp: Date.now(),
+    };
+    console.log(`chat:message in room ${roomId} from ${username}: ${text}`);
+    this.server.to(roomId).emit('chat:message', payload);
+  }
+
+  @SubscribeMessage('leaveRoom')
+  async handleLeaveRoom(
+    @MessageBody() data: { roomId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const { roomId } = data;
+    client.leave(roomId);
+    console.log(`Client ${client.id} left room ${roomId}`);
+    this.server.to(roomId).emit('userLeft', { clientId: client.id });
+  }
 }
+

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import socket from "@/lib/socket";
 import SyncPlayer from "@/components/SyncPlayer";
+import ChatBox from "@/components/ChatBox";
 
 // ─── Icons (inline SVGs to avoid extra deps) ────────────────
 function FilmIcon({ className }: { className?: string }) {
@@ -73,6 +74,8 @@ function SignalIcon({ className }: { className?: string }) {
 // ─── Main Page ──────────────────────────────────────────────
 export default function Home() {
   const [room, setRoom] = useState("");
+  const [username, setUsername] = useState("");
+  const [activeUsername, setActiveUsername] = useState("");
   const [joined, setJoined] = useState(false);
   const [connected, setConnected] = useState(false);
   const [videoSrc, setVideoSrc] = useState("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4");
@@ -117,10 +120,23 @@ export default function Home() {
   }, []);
 
   const handleJoin = useCallback(() => {
-    const trimmed = room.trim();
-    if (!trimmed) return;
-    socket.emit("joinRoom", { roomId: trimmed });
+    const trimmedRoom = room.trim();
+    if (!trimmedRoom) return;
+
+    // Generate unique random name if empty
+    const finalUsername = username.trim() || `Guest_${Math.floor(1000 + Math.random() * 9000)}`;
+    setActiveUsername(finalUsername);
+
+    socket.emit("joinRoom", { roomId: trimmedRoom });
     setJoined(true);
+  }, [room, username]);
+
+  const handleLeave = useCallback(() => {
+    const trimmedRoom = room.trim();
+    if (trimmedRoom) {
+      socket.emit("leaveRoom", { roomId: trimmedRoom });
+    }
+    setJoined(false);
   }, [room]);
 
   const handleVideoSrcChange = useCallback((newSrc: string) => {
@@ -165,80 +181,118 @@ export default function Home() {
       </header>
 
       {/* ─── Content ──────────────────────────────────────── */}
-      <main className="relative z-10 flex flex-1 flex-col items-center justify-center gap-10 px-6 py-12">
-        {/* Join Room Card */}
-        {!joined && (
-          <div className="w-full max-w-md animate-fade-in">
-            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl p-8 shadow-2xl shadow-black/40">
-              <div className="flex items-center gap-3 mb-6">
-                <UsersIcon className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-base font-medium text-zinc-200">
-                  Join a Watch Party
-                </h2>
+      <main className="relative z-10 flex flex-1 w-full flex-col px-4 md:px-8 py-6">
+        {!joined ? (
+          /* Join Room Card */
+          <div className="flex flex-1 items-center justify-center py-12 animate-fade-in">
+            <div className="w-full max-w-md">
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl p-8 shadow-2xl shadow-black/40">
+                <div className="flex items-center gap-3 mb-6">
+                  <UsersIcon className="w-5 h-5 text-indigo-400" />
+                  <h2 className="text-base font-medium text-zinc-200">
+                    Join a Watch Party
+                  </h2>
+                </div>
+
+                <p className="text-sm text-zinc-500 mb-5 leading-relaxed">
+                  Enter a room code and username to sync playback and chat in real time.
+                </p>
+
+                <div className="flex flex-col gap-4">
+                  <div>
+                    <label htmlFor="room-input" className="block text-[10px] font-medium text-zinc-400 mb-1.5 uppercase tracking-wider">
+                      Room Code
+                    </label>
+                    <input
+                      id="room-input"
+                      type="text"
+                      value={room}
+                      onChange={(e) => setRoom(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+                      placeholder="e.g. movie-night-42"
+                      className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="username-input" className="block text-[10px] font-medium text-zinc-400 mb-1.5 uppercase tracking-wider">
+                      Username (Optional)
+                    </label>
+                    <input
+                      id="username-input"
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+                      placeholder="e.g. Guest"
+                      className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
+                    />
+                  </div>
+
+                  <button
+                    id="join-btn"
+                    onClick={handleJoin}
+                    disabled={!room.trim()}
+                    className="w-full mt-2 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.97]"
+                  >
+                    Join Room
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Theater Layout */
+          <div className="flex flex-1 flex-col lg:flex-row gap-6 w-full max-w-none items-stretch h-auto lg:h-[calc(100vh-130px)] animate-fade-in">
+            {/* Player Column (Takes remaining width) */}
+            <div className="flex-1 flex flex-col gap-4 min-h-0">
+              {/* Room Indicator & Leave Room & Source Info */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.01] border border-white/[0.05] rounded-xl p-3">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-3.5 py-1.5 text-xs text-zinc-400 backdrop-blur-sm">
+                    <SignalIcon className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>
+                      Room: <span className="text-zinc-200 font-semibold">{room}</span>
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleLeave}
+                    className="rounded-full border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 px-3.5 py-1.5 text-xs font-semibold text-red-400 transition-colors duration-200 cursor-pointer"
+                  >
+                    Leave Room
+                  </button>
+                </div>
+
+                <div className="flex flex-1 sm:flex-initial gap-2 items-center rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 max-w-md w-full sm:w-auto">
+                  <span className="text-[10px] text-zinc-500 whitespace-nowrap font-medium">SOURCE:</span>
+                  <input
+                    id="video-url-input"
+                    type="text"
+                    value={videoSrc}
+                    onChange={(e) => handleVideoSrcChange(e.target.value)}
+                    placeholder="Paste direct MP4/WebM URL"
+                    className="flex-1 bg-transparent text-xs text-indigo-300 placeholder:text-zinc-700 outline-none w-full"
+                  />
+                </div>
               </div>
 
-              <p className="text-sm text-zinc-500 mb-5 leading-relaxed">
-                Enter a room code to sync playback with friends in real time.
+              {/* Video Player */}
+              <div className="relative w-full aspect-video lg:aspect-auto lg:flex-1 bg-black/40 rounded-2xl border border-white/[0.06] overflow-hidden min-h-0">
+                <SyncPlayer roomId={room} videoSrc={videoSrc} />
+              </div>
+
+              {/* Footer hint */}
+              <p className="text-[10px] text-zinc-600 tracking-wide text-center">
+                Playback is synced across all peers in this room.
               </p>
+            </div>
 
-              <div className="flex gap-3">
-                <input
-                  id="room-input"
-                  type="text"
-                  value={room}
-                  onChange={(e) => setRoom(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleJoin()}
-                  placeholder="e.g. movie-night-42"
-                  className="flex-1 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
-                />
-                <button
-                  id="join-btn"
-                  onClick={handleJoin}
-                  disabled={!room.trim()}
-                  className="rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.97]"
-                >
-                  Join
-                </button>
-              </div>
+            {/* Chat Sidebar Column (Fixed width on desktop) */}
+            <div className="w-full lg:w-[350px] flex flex-col h-[350px] lg:h-auto min-h-0">
+              <ChatBox roomId={room} username={activeUsername} />
             </div>
           </div>
         )}
-
-        {/* Room & Video Controls */}
-        {joined && (
-          <div className="flex flex-col items-center gap-4 w-full max-w-xl animate-fade-in">
-            <div className="flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-2 text-xs text-zinc-400 backdrop-blur-sm">
-              <SignalIcon className="w-3.5 h-3.5 text-emerald-400" />
-              <span>
-                Room: <span className="text-zinc-200 font-medium">{room}</span>
-              </span>
-            </div>
-
-            <div className="w-full flex gap-2 items-center rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-              <span className="text-xs text-zinc-500 whitespace-nowrap px-1">Video Source:</span>
-              <input
-                id="video-url-input"
-                type="text"
-                value={videoSrc}
-                onChange={(e) => handleVideoSrcChange(e.target.value)}
-                placeholder="Paste any direct video MP4/WebM URL here"
-                className="flex-1 bg-transparent text-xs text-indigo-300 placeholder:text-zinc-700 outline-none"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Video Player */}
-        <div className={`w-full transition-all duration-700 ${joined ? "opacity-100 translate-y-0" : "opacity-30 translate-y-2 pointer-events-none blur-[2px]"}`}>
-          <SyncPlayer roomId={room} videoSrc={videoSrc} />
-        </div>
-
-        {/* Footer hint */}
-        <p className="text-[11px] text-zinc-600 tracking-wide">
-          {joined
-            ? "Playback is synced across all peers in this room."
-            : "Join a room to enable synchronised playback."}
-        </p>
       </main>
     </div>
   );
